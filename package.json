@@ -1,0 +1,24 @@
+{
+  "name": "parametric-tests",
+  "version": "0.0.1",
+  "description": "Test for parametric geometries rendering with webGL.",
+  "main": "./server/index.js",
+  "scripts": {
+    "test": "node ./server/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labormedia/parametric-tests.git"
+  },
+  "keywords": [
+    "webgl",
+    "three.js",
+    "parametric"
+  ],
+  "author": "Diego Correa T. <algoritmia@labormedia.cl>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/labormedia/parametric-tests/issues"
+  },
+  "homepage": "https://github.com/labormedia/parametric-tests#readme"
+}

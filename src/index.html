@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>parametric tests - three.js</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+
+	<body>
+
+		<div id="container"></div>
+
+		<div id="info"><a href="http://labs.ikkuna.io:8080" target="_blank">three.js</a> - parametric tests</div>
+
+		<script type="module">
+
+			import * as THREE from './build/three.module.js';
+
+			import Stats from './jsm/libs/stats.module.js';
+
+			import { GUI } from './jsm/libs/dat.gui.module.js';
+			import { OrbitControls } from './jsm/controls/OrbitControls.js';
+			import { LineMaterial } from './jsm/lines/LineMaterial.js';
+			import { Wireframe } from './jsm/lines/Wireframe.js';
+            import { WireframeGeometry2 } from './jsm/lines/WireframeGeometry2.js';
+            
+            import { VertexNormalsHelper } from './jsm/helpers/VertexNormalsHelper.js';
+
+            import { ParametricGeometries } from './jsm/geometries/ParametricGeometries.js';
+
+			var state, geo, renderer, scene, camera, camera2, controls;
+			// var wireframe1;
+			var matLine, matLineBasic, matLineDashed;
+			var stats;
+			var gui;
+
+			// viewport
+			var insetWidth;
+            var insetHeight;
+            
+            const polygonInit = 10
+
+			init();
+			animate();
+
+			function init() {
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setClearColor( 0x000000, 0.0 );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+                scene = new THREE.Scene();
+                var axesHelper = new THREE.AxesHelper( 5 );
+                axesHelper.visible = false
+                scene.add( axesHelper );
+
+				camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 1000 );
+				camera.position.set( - 50, 0, 50 );
+
+				camera2 = new THREE.PerspectiveCamera( 40, 1, 1, 1000 );
+				camera2.position.set( 50, 0, 50 );
+
+				controls = new OrbitControls( camera, renderer.domElement );
+				controls.minDistance = 10;
+				controls.maxDistance = 500;
+
+
+				// Wireframe ( WireframeGeometry2, LineMaterial )
+
+                // var geo = new THREE.IcosahedronBufferGeometry( 20, 1 );
+                geo = (new THREE.ParametricBufferGeometry( ParametricGeometries.klein, 20, 20 ));
+                geo.rotateX(-1.5)
+
+                var geometry = new THREE.WireframeGeometry( geo );
+                geometry.center();
+
+				matLine = new LineMaterial( {
+
+					color: 0x4080ff,
+					linewidth: 5, // in pixels
+					//resolution:  // to be set by renderer, eventually
+					dashed: false
+
+				} );
+
+                // scene.add( wireframeWithMaterial(geometry,matLine) )
+
+
+				// Line ( THREE.WireframeGeometry, THREE.LineBasicMaterial ) - rendered with gl.LINE
+
+                addGeometry(geo)
+
+				window.addEventListener( 'resize', onWindowResize, false );
+				onWindowResize();
+
+				stats = new Stats();
+				document.body.appendChild( stats.dom );
+
+                state = {}
+				state.params = initGui();
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				insetWidth = window.innerHeight / 4; // square
+				insetHeight = window.innerHeight / 4;
+
+				camera2.aspect = insetWidth / insetHeight;
+				camera2.updateProjectionMatrix();
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				stats.update();
+
+				// main scene
+
+				renderer.setClearColor( 0x000000, 0 );
+
+				renderer.setViewport( 0, 0, window.innerWidth, window.innerHeight );
+
+				// renderer will set this eventually
+				matLine.resolution.set( window.innerWidth, window.innerHeight ); // resolution of the viewport
+
+				renderer.render( scene, camera );
+
+				// inset scene
+
+				renderer.setClearColor( 0x222222, 1 );
+
+				renderer.clearDepth(); // important!
+
+				renderer.setScissorTest( true );
+
+				renderer.setScissor( 20, 20, insetWidth, insetHeight );
+
+				renderer.setViewport( 20, 20, insetWidth, insetHeight );
+
+				camera2.position.copy( camera.position );
+				camera2.quaternion.copy( camera.quaternion );
+
+				// renderer will set this eventually
+				matLine.resolution.set( insetWidth, insetHeight ); // resolution of the inset viewport
+
+				renderer.render( scene, camera2 );
+
+				renderer.setScissorTest( false );
+
+            }
+
+            function addGeometry (geo) {
+                const normals = geometryNormals(geo)
+                const box = geometryBox(normals.geometry)
+                const wireframe = wireframeBasic(new THREE.WireframeGeometry( geo ) )
+                
+                normals.visible = false
+                box.visible = false
+
+                scene.add( wireframe )
+                scene.add( normals )
+                scene.add( box )
+
+                return null
+            }
+            
+            function editScene(scenario, geometry) {
+
+                const normals = geometryNormals(geometry)
+                const box = geometryBox(normals.geometry)
+
+                normals.visible = state.params.normals
+                box.visible = state.params.box
+
+                scenario.children[ 3 ].geometry.dispose();
+                scenario.remove(scenario.children[ 3 ])
+
+                console.log('object: ', scenario.children)
+                scenario.children[ 1 ].geometry.dispose();
+                scenario.children[ 1 ].geometry = (new THREE.WireframeGeometry( geometry ));
+
+
+                scenario.children[ 2 ].geometry.dispose();
+                scenario.remove(scenario.children[ 2 ])
+                scenario.add( normals );
+                
+                scenario.add( box );
+
+            }
+
+            function geometryNormals(geometry) {
+                var material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+                var mesh = new THREE.Mesh( geometry, material );
+                var vnh = new VertexNormalsHelper( mesh, 2, 0x00ff00, 1 );
+                return vnh
+            }
+
+            function geometryBox(geometry) {
+                var object = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( 0xff0000 ) );
+                var box = new THREE.BoxHelper( object, 0xffff00 );
+                return box
+            }
+
+            function wireframeWithMaterial(geometry, material) {
+				var wireframe = new Wireframe( geometry, material );
+				wireframe.computeLineDistances();
+                wireframe.scale.set( 1, 1, 1 );
+                wireframe.visible = false
+				return wireframe
+            }
+
+            function wireframeBasic(geometry) {
+                var geo2 = new THREE.WireframeGeometry( geometry );
+
+                matLineBasic = new THREE.LineBasicMaterial( { color: 0x4080ff } );
+                matLineDashed = new THREE.LineDashedMaterial( { scale: 2, dashSize: 1, gapSize: 1 } );
+
+                var wireframe = new THREE.LineSegments( geo2, matLineBasic );
+                wireframe.computeLineDistances();
+                wireframe.visible = true;
+                return wireframe
+            }
+
+			//
+
+			function initGui() {
+
+				gui = new GUI();
+
+				var params = {
+                    'axes': false,
+                    'box': false,
+                    'normals': false,
+                    'polygons': polygonInit
+                };
+                
+                gui.add( params, 'axes' ).onChange( function ( val ) {
+
+                    scene.children[0].visible = val
+
+                } );
+
+				gui.add( params, 'box' ).onChange( function ( val ) {
+
+                    scene.children[3].visible = val
+
+                } );
+                
+                gui.add( params, 'normals' ).onChange( function ( val ) {
+
+                    scene.children[2].visible = val
+
+                } );
+                
+                gui.add( params, 'polygons', 5, 30, 1 ).onChange( function ( val ) { 
+                    var geometry = (new THREE.ParametricBufferGeometry( ParametricGeometries.klein, val, val ))
+                    geometry.rotateX(-1.5)
+                    editScene(scene, geometry)
+                })
+
+                return params
+
+			}
+
+		</script>
+
+	</body>
+
+</html>
